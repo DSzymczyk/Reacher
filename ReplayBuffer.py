@@ -18,15 +18,15 @@ class ReplayBuffer:
         self.seed = random.seed(seed)
 
     def __iter__(self):
-        '''
-        :return: Iterator of ReplayBuffer with size equal to _batch_size
-        '''
+        """
+        :return: Iterator of ReplayBuffer with size equal to `_batch_size`.
+        """
         return ReplayBufferIterator(self._deque, self._batch_size)
 
     def __len__(self):
-        '''
-        :return: Current lenght of ReplayBuffer
-        '''
+        """
+        :return: Current length of ReplayBuffer.
+        """
         return self._deque.__len__()
 
     def __repr__(self):
@@ -36,25 +36,25 @@ class ReplayBuffer:
         return result
 
     def add(self, state, action, reward, next_state, done):
-        '''
+        """
         Adding new experiance to ReplayBuffer
         :param state: current state
         :param action: current action
         :param reward: current reward
         :param next_state: next state
         :param done: boolean flag if episode is done
-        '''
+        """
         state = torch.from_numpy(state)
         next_state = torch.from_numpy(next_state)
         exp = experience(state, action, reward, next_state, done)
         self._deque.append(exp)
 
     def get_sample(self):
-        '''
+        """
         If deque size is greater or equal batch size return tuple of tensors with random selected experiances
         otherwise return None
         :return: tuple of tensors with states, actions, rewards, next_states, dones or None
-        '''
+        """
         if self._deque.__len__() < self._batch_size:
             return None
         experiences = list(iter(self))

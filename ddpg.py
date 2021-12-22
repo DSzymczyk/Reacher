@@ -10,10 +10,11 @@ import torch.optim as optim
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-class ddpg:
+
+class DDPG:
 
     def __init__(self, nS, nA, random_seed, load_checkpoint, checkpoint_prefix='', buffer_size=int(1e6), batch_size=512,
-                 gamma=0.99, tau=1e-3, policy_lr=1e-4, value_lr=1e-3, weight_decay=0, learn_every=20, learns_number=10):
+                 gamma=0.99, tau=1e-3, policy_lr=1e-4, value_lr=1e-3, weight_decay=0, learn_every=4):
         self.state_size = nS
         self.action_size = nA
         self._checkpoint_prefix = checkpoint_prefix
@@ -39,18 +40,29 @@ class ddpg:
         self._gamma = gamma
         self._tau = tau
         self._learn_every = learn_every
-        self._learns_number = learns_number
         self._step = 0
 
     def step(self, state, action, reward, next_state, done):
+        '''
+            Add current step to replay buffer and learn every `_learn_every` episode.
+            :param state: current state
+            :param action: current action
+            :param reward: current reward
+            :param next_state: next state
+            :param done: boolean flag if episode is done
+        '''
         self._replay_buffer.add(state, action, reward, next_state, done)
         self._step = (self._step + 1) % self._learn_every
         if (len(self._replay_buffer) > self._batch_size) and (self._step == 0):
-            for _ in range(self._learns_number):
                 experiences = self._replay_buffer.get_sample()
                 self.learn(experiences, self._gamma)
 
     def act(self, state):
+        '''
+        Selecting actions according to agent and clipping them to -1 to 1 borders.
+        :param state: current state
+        :return: Actions selected by agent
+        '''
         state = torch.from_numpy(state).float().to(device)
         self._online_policy_model.eval()
         with torch.no_grad():
@@ -59,6 +71,9 @@ class ddpg:
         return np.clip(action, -1, 1)
 
     def learn(self, experiences, gamma):
+        '''
+        Training model using DDPG.
+        '''
         states, actions, rewards, next_states, dones = experiences
 
         argmax_target_policy_model_action = self._target_policy_model(next_states)
@@ -82,15 +97,27 @@ class ddpg:
         self.soft_update(self._online_value_model, self._target_value_model, self._tau)
         self.soft_update(self._online_policy_model, self._target_policy_model, self._tau)
 
-    def soft_update(self, local_model, target_model, tau):
-        for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
+    def soft_update(self, online_model, target_model, tau):
+        """
+        Updating target model using Polyak averaging.
+        :param online_model: agents online model
+        :param target_model: agents target model
+        :param tau: copy weight parameter, greater the tau is more will be copied from online model
+        """
+        for target_param, local_param in zip(target_model.parameters(), online_model.parameters()):
             target_param.data.copy_(tau * local_param.data + (1.0 - tau) * target_param.data)
 
     def save_weights(self):
+        """
+        Save weights of policy and value models.
+        """
         torch.save(self._online_policy_model.state_dict(), f'weights/{self._checkpoint_prefix}policy_checkpoint.pth')
         torch.save(self._online_value_model.state_dict(), f'weights/{self._checkpoint_prefix}value_checkpoint.pth')
 
     def load_weights(self):
+        """
+        Load weights of policy and value models.
+        """
         self._online_policy_model.load_state_dict(torch.load(f'weights/{self._checkpoint_prefix}policy_checkpoint.pth'))
         self._online_policy_model.eval()
         self._target_policy_model.load_state_dict(torch.load(f'weights/{self._checkpoint_prefix}policy_checkpoint.pth'))

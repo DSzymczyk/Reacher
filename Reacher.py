@@ -6,7 +6,7 @@ import numpy as np
 from unityagents import UnityEnvironment
 from tqdm import tqdm
 
-from ddpg import DDPG
+from DDGP import DDPG
 
 
 def train_agent(n_episodes=200):
@@ -35,6 +35,7 @@ def train_agent(n_episodes=200):
             if np.any(dones):
                 break
 
+        agent.reset_noise()
         episode_score = np.mean(scores)
         scores_deque.append(episode_score)
         average_score = np.mean(scores_deque)
@@ -85,7 +86,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     training_mode = not args.test_mode
-    env = UnityEnvironment('./Reacher_Windows_x86_64/Reacher.exe', no_graphics=training_mode)
+    env = UnityEnvironment('./Reacher_Windows_x86_64/Reacher.exe', no_graphics=training_mode, base_port=9999)
     brain_name = env.brain_names[0]
     brain = env.brains[brain_name]
     env_info = env.reset(train_mode=training_mode)[brain_name]

@@ -8,6 +8,8 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
+from noise import OrnsteinUhlenbeckProcess
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -32,6 +34,7 @@ class DDPG:
         self._value_optimizer = optim.Adam(self._online_value_model.parameters(), lr=value_lr, weight_decay=weight_decay)
 
         self._replay_buffer = ReplayBuffer(buffer_size, batch_size, random_seed)
+        self._noise = OrnsteinUhlenbeckProcess(nA, random_seed)
 
         self.soft_update(self._online_value_model, self._target_value_model, 1.0)
         self.soft_update(self._online_policy_model, self._target_policy_model, 1.0)
@@ -43,14 +46,14 @@ class DDPG:
         self._step = 0
 
     def step(self, state, action, reward, next_state, done):
-        '''
-            Add current step to replay buffer and learn every `_learn_every` episode.
-            :param state: current state
-            :param action: current action
-            :param reward: current reward
-            :param next_state: next state
-            :param done: boolean flag if episode is done
-        '''
+        """
+        Add current step to replay buffer and learn every `_learn_every` episode.
+        :param state: current state
+        :param action: current action
+        :param reward: current reward
+        :param next_state: next state
+        :param done: boolean flag if episode is done
+        """
         self._replay_buffer.add(state, action, reward, next_state, done)
         self._step = (self._step + 1) % self._learn_every
         if (len(self._replay_buffer) > self._batch_size) and (self._step == 0):
@@ -58,22 +61,23 @@ class DDPG:
                 self.learn(experiences, self._gamma)
 
     def act(self, state):
-        '''
+        """
         Selecting actions according to agent and clipping them to -1 to 1 borders.
         :param state: current state
         :return: Actions selected by agent
-        '''
+        """
         state = torch.from_numpy(state).float().to(device)
         self._online_policy_model.eval()
         with torch.no_grad():
             action = self._online_policy_model(state).cpu().data.numpy()
         self._online_policy_model.train()
+        action += self._noise.sample()
         return np.clip(action, -1, 1)
 
     def learn(self, experiences, gamma):
-        '''
+        """
         Training model using DDPG.
-        '''
+        """
         states, actions, rewards, next_states, dones = experiences
 
         argmax_target_policy_model_action = self._target_policy_model(next_states)
@@ -106,6 +110,9 @@ class DDPG:
         """
         for target_param, local_param in zip(target_model.parameters(), online_model.parameters()):
             target_param.data.copy_(tau * local_param.data + (1.0 - tau) * target_param.data)
+
+    def reset_noise(self):
+        self._noise.reset()
 
     def save_weights(self):
         """

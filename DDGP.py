@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
-from noise import OrnsteinUhlenbeckProcess
+from OrnsteinUhlenbeckProcess import OrnsteinUhlenbeckProcess
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -60,10 +60,11 @@ class DDPG:
                 experiences = self._replay_buffer.get_sample()
                 self.learn(experiences, self._gamma)
 
-    def act(self, state):
+    def act(self, state, add_noise):
         """
         Selecting actions according to agent and clipping them to -1 to 1 borders.
         :param state: current state
+        :param add_noise: boolean value whenever to add noise to action
         :return: Actions selected by agent
         """
         state = torch.from_numpy(state).float().to(device)
@@ -71,7 +72,8 @@ class DDPG:
         with torch.no_grad():
             action = self._online_policy_model(state).cpu().data.numpy()
         self._online_policy_model.train()
-        action += self._noise.sample()
+        if add_noise:
+            action += self._noise.sample()
         return np.clip(action, -1, 1)
 
     def learn(self, experiences, gamma):
@@ -80,8 +82,8 @@ class DDPG:
         """
         states, actions, rewards, next_states, dones = experiences
 
-        argmax_target_policy_model_action = self._target_policy_model(next_states)
-        target_model_q_values = self._target_value_model(next_states, argmax_target_policy_model_action)
+        target_policy_model_action = self._target_policy_model(next_states)
+        target_model_q_values = self._target_value_model(next_states, target_policy_model_action)
 
         target_q_values = rewards + (gamma * target_model_q_values * (1 - dones))
         expected_q_values = self._online_value_model(states, actions)
@@ -92,8 +94,8 @@ class DDPG:
         torch.nn.utils.clip_grad_norm_(self._online_value_model.parameters(), 1)
         self._value_optimizer.step()
 
-        argmax_online_policy_model_action = self._online_policy_model(states)
-        policy_loss = -self._online_value_model(states, argmax_online_policy_model_action).mean()
+        online_policy_model_action = self._online_policy_model(states)
+        policy_loss = -self._online_value_model(states, online_policy_model_action).mean()
         self._policy_optimizer.zero_grad()
         policy_loss.backward()
         self._policy_optimizer.step()

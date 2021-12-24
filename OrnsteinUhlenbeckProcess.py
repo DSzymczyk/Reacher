@@ -10,7 +10,7 @@ class OrnsteinUhlenbeckProcess:
         Ornstein-Uhlenbeck process
         :param size: size of noise vector
         :param random_seed: random seed
-        :param mu: vector of ones of size
+        :param mu: represents a long-term mean of the OU process
         :param theta: mean reverting speed value
         :param sigma: deviation of stochastic factor
         """
